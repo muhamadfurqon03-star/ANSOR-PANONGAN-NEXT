@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Informasi Anggota GP Ansor Kecamatan Panongan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .ansor-green {
+            background-color: #006837;
+        }
+        .ansor-text-green {
+            color: #006837;
+        }
+        .ansor-yellow {
+            background-color: #f9ed32;
+        }
+        .loading-overlay {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(4px);
+        }
+        .admin-only {
+            display: none;
+        }
+        body.is-admin .admin-only {
+            display: block;
+        }
+        body.is-admin .admin-inline {
+            display: inline-block;
+        }
+        .admin-inline {
+            display: none;
+        }
+    </style>
+</head>
+<body class="">
+
+    <!-- Loading Screen -->
+    <div id="loadingOverlay" class="fixed inset-0 loading-overlay z-[60] flex flex-col items-center justify-center transition-opacity duration-300">
+        <div class="w-16 h-16 border-4 border-green-200 border-t-green-600 rounded-full animate-spin mb-4"></div>
+        <p class="text-green-800 font-semibold">Menghubungkan ke Database...</p>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 z-[70] hidden bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="ansor-green p-6 text-white text-center">
+                <i class="fas fa-user-shield text-4xl mb-2"></i>
+                <h3 class="text-xl font-bold">Otorisasi Admin</h3>
+                <p class="text-xs opacity-80">Masukkan kata sandi untuk akses penuh</p>
+            </div>
+            <div class="p-6">
+                <input type="password" id="adminPassword" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none mb-4" placeholder="Kata Sandi Admin">
+                <div class="flex space-x-3">
+                    <button onclick="closeLoginModal()" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-600 font-medium">Batal</button>
+                    <button onclick="attemptLogin()" class="flex-1 px-4 py-2 ansor-green text-white rounded-lg font-medium">Login</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="ansor-green text-white p-4 shadow-lg flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <svg width="45" height="45" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="48" fill="white" />
+                    <circle cx="50" cy="50" r="42" fill="#006837" />
+                    <path d="M50 20 L60 40 L80 40 L65 55 L70 75 L50 65 L30 75 L35 55 L20 40 L40 40 Z" fill="#f9ed32" />
+                    <rect x="47" y="65" width="6" height="15" fill="#f9ed32" />
+                </svg>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight uppercase">GP Ansor Panongan</h1>
+                    <p class="text-xs opacity-80">Database Anggota & Kaderisasi</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div id="adminBadge" class="hidden items-center bg-yellow-400 text-green-900 px-3 py-1 rounded-full text-xs font-bold">
+                    <i class="fas fa-shield-alt mr-1"></i> ADMIN MODE
+                </div>
+                <button id="loginToggleBtn" onclick="openLoginModal()" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg text-sm font-semibold transition">
+                    <i class="fas fa-lock mr-2"></i> Admin Login
+                </button>
+                <button id="logoutBtn" onclick="handleLogout()" class="hidden bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-semibold transition">
+                    <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-grow p-4 md:p-8 container mx-auto">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-600">
+                    <div class="flex items-center">
+                        <div class="p-3 bg-green-100 rounded-full mr-4">
+                            <i class="fas fa-users ansor-text-green text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 font-medium">Total Anggota</p>
+                            <h3 id="total-members" class="text-2xl font-bold">0</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-yellow-500">
+                    <div class="flex items-center">
+                        <div class="p-3 bg-yellow-100 rounded-full mr-4">
+                            <i class="fas fa-graduation-cap text-yellow-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 font-medium">Lulus Kaderisasi</p>
+                            <h3 id="total-pkd" class="text-2xl font-bold">0</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
+                    <div class="flex items-center">
+                        <div class="p-3 bg-blue-100 rounded-full mr-4">
+                            <i class="fas fa-id-card text-blue-600 text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500 font-medium">Anggota Banser</p>
+                            <h3 id="total-banser" class="text-2xl font-bold">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Form Input (ADMIN ONLY) -->
+                <div class="lg:col-span-1 admin-only">
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden sticky top-8 border-2 border-green-600">
+                        <div class="ansor-green p-4">
+                            <h2 class="text-white font-semibold flex items-center">
+                                <i class="fas fa-user-plus mr-2"></i> Tambah Anggota Baru
+                            </h2>
+                        </div>
+                        <form id="memberForm" class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label>
+                                <input type="text" id="nama" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">NIK</label>
+                                <input type="number" id="nik" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Tempat Lahir</label>
+                                    <input type="text" id="tempat_lahir" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Tgl Lahir</label>
+                                    <input type="date" id="tgl_lahir" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition">
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Kategori Pekerjaan</label>
+                                <select id="kategori_pekerjaan" required onchange="togglePekerjaanCustom()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition">
+                                    <option value="">-- Pilih Pekerjaan --</option>
+                                    <option value="Pelajar/Mahasiswa">Pelajar/Mahasiswa</option>
+                                    <option value="PNS/ASN">PNS/ASN</option>
+                                    <option value="TNI/POLRI">TNI/POLRI</option>
+                                    <option value="Karyawan Swasta">Karyawan Swasta</option>
+                                    <option value="Wiraswasta">Wirausaha / Mandiri</option>
+                                    <option value="Buruh">Buruh</option>
+                                    <option value="Guru/Dosen">Guru/Dosen</option>
+                                    <option value="Petani/Nelayan">Petani/Nelayan</option>
+                                    <option value="Lainnya">Lainnya</option>
+                                </select>
+                            </div>
+
+                            <div id="wrapper_pekerjaan_custom" class="hidden">
+                                <label id="label_pekerjaan_custom" class="block text-sm font-medium text-gray-700 mb-1">Detail Pekerjaan</label>
+                                <input type="text" id="pekerjaan_custom" class="w-full px-4 py-2 border border-green-300 bg-green-50 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Alamat Lengkap</label>
+                                <textarea id="alamat" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition" rows="2"></textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Jenjang Kaderisasi</label>
+                                <select id="kaderisasi" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none transition">
+                                    <optgroup label="Kaderisasi Ansor">
+                                        <option value="Anggota">Anggota Biasa</option>
+                                        <option value="PKD">PKD (Pelatihan Kader Dasar)</option>
+                                        <option value="PKL">PKL (Pelatihan Kader Lanjutan)</option>
+                                        <option value="PKN">PKN (Pelatihan Kader Nasional)</option>
+                                    </optgroup>
+                                    <optgroup label="Kaderisasi Banser">
+                                        <option value="DTD">DTD (Diklat Terpadu Dasar)</option>
+                                        <option value="DIKLATSAR">DIKLATSAR (Diklat Dasar)</option>
+                                        <option value="SUSBALAN">SUSBALAN (Kursus Banser Lanjutan)</option>
+                                        <option value="DIKLATSUS">DIKLATSUS (Diklat Khusus)</option>
+                                        <option value="SUSBANPIM">SUSBANPIM (Kursus Banser Pimpinan)</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center">
+                                <input type="checkbox" id="is_banser" class="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500">
+                                <label for="is_banser" class="ml-2 text-sm text-gray-700 font-medium">Anggota Banser</label>
+                            </div>
+                            <button type="submit" id="submitBtn" class="w-full ansor-green text-white font-bold py-3 rounded-lg hover:bg-green-700 transition duration-300 shadow-lg disabled:opacity-50">
+                                SIMPAN DATA
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Info Box (Public Only) -->
+                <div class="lg:col-span-1 block" id="publicInfoBox">
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-xl shadow-sm mb-6">
+                        <div class="flex items-center mb-3">
+                            <i class="fas fa-info-circle text-blue-500 text-2xl mr-3"></i>
+                            <h3 class="font-bold text-blue-800">Mode Publik</h3>
+                        </div>
+                        <p class="text-sm text-blue-700 leading-relaxed">
+                            Anda sedang mengakses database dalam mode lihat-saja. Statistik dan daftar anggota ditampilkan secara real-time. Untuk menambah atau menghapus data, silakan login menggunakan akun Admin melalui tombol di pojok kanan atas.
+                        </p>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h4 class="font-bold text-gray-800 mb-4 border-b pb-2">Kontak Administrasi</h4>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex items-center text-gray-600">
+                                <i class="fab fa-whatsapp w-6 text-green-500"></i>
+                                <span>PAC GP Ansor Panongan</span>
+                            </div>
+                            <div class="flex items-center text-gray-600">
+                                <i class="fas fa-envelope w-6 text-red-400"></i>
+                                <span>ansorpanongan@gmail.com</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Table -->
+                <div class="lg:col-span-2">
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                        <div class="bg-gray-50 border-b p-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <h2 class="text-gray-800 font-bold flex items-center">
+                                <i class="fas fa-list mr-2 text-green-600"></i> Daftar Anggota 
+                                <span id="syncStatus" class="ml-3 text-[10px] bg-green-100 text-green-600 px-2 py-0.5 rounded-full uppercase tracking-wider hidden">Live Data</span>
+                            </h2>
+                            <div class="relative w-full md:w-64">
+                                <input type="text" id="searchInput" placeholder="Cari nama/NIK/jenjang..." class="w-full pl-9 pr-4 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                                <i class="fas fa-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-100 text-gray-600 uppercase text-xs font-bold">
+                                        <th class="px-6 py-3 border-b">Nama</th>
+                                        <th class="px-6 py-3 border-b">Pekerjaan</th>
+                                        <th class="px-6 py-3 border-b">Kaderisasi</th>
+                                        <th class="px-6 py-3 border-b">Status</th>
+                                        <th class="px-6 py-3 border-b text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="memberTableBody" class="divide-y divide-gray-100 text-sm">
+                                    <!-- Data injected by Firebase -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="emptyState" class="p-10 text-center text-gray-500 hidden">
+                            <i class="fas fa-folder-open text-4xl mb-3 opacity-20"></i>
+                            <p>Belum ada data anggota tersimpan.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="bg-gray-800 text-gray-400 py-6 px-4 text-center text-sm">
+            <p>&copy; 2024 Pimpinan Anak Cabang GP Ansor Panongan.</p>
+        </footer>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 transform translate-y-20 opacity-0 transition-all duration-300 bg-gray-900 text-white px-6 py-3 rounded-lg shadow-2xl flex items-center space-x-2 z-50">
+        <i id="toastIcon" class="fas fa-check-circle text-green-400"></i>
+        <span id="toastMessage">Data berhasil disimpan!</span>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        // State
+        let members = [];
+        let currentUser = null;
+        const ADMIN_PASSWORD = "ansorpanongan"; // Password default
+
+        // Elements
+        const memberForm = document.getElementById('memberForm');
+        const memberTableBody = document.getElementById('memberTableBody');
+        const emptyState = document.getElementById('emptyState');
+        const searchInput = document.getElementById('searchInput');
+        const wrapperPekerjaanCustom = document.getElementById('wrapper_pekerjaan_custom');
+        const labelPekerjaanCustom = document.getElementById('label_pekerjaan_custom');
+        const inputPekerjaanCustom = document.getElementById('pekerjaan_custom');
+        const selectPekerjaan = document.getElementById('kategori_pekerjaan');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const syncStatus = document.getElementById('syncStatus');
+        const loginModal = document.getElementById('loginModal');
+        const adminBadge = document.getElementById('adminBadge');
+        const loginToggleBtn = document.getElementById('loginToggleBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const publicInfoBox = document.getElementById('publicInfoBox');
+
+        // Authentication Logic
+        window.openLoginModal = () => {
+            loginModal.classList.remove('hidden');
+            document.getElementById('adminPassword').focus();
+        };
+
+        window.closeLoginModal = () => {
+            loginModal.classList.add('hidden');
+            document.getElementById('adminPassword').value = '';
+        };
+
+        window.attemptLogin = () => {
+            const pw = document.getElementById('adminPassword').value;
+            if (pw === ADMIN_PASSWORD) {
+                setAdminMode(true);
+                closeLoginModal();
+                showToast("Selamat Datang, Admin!");
+                // Store in session
+                sessionStorage.setItem('ansor_admin_session', 'active');
+            } else {
+                showToast("Kata sandi salah!", true);
+            }
+        };
+
+        window.handleLogout = () => {
+            setAdminMode(false);
+            sessionStorage.removeItem('ansor_admin_session');
+            showToast("Logout Berhasil");
+        };
+
+        function setAdminMode(active) {
+            if (active) {
+                document.body.classList.add('is-admin');
+                adminBadge.classList.remove('hidden');
+                adminBadge.classList.add('flex');
+                loginToggleBtn.classList.add('hidden');
+                logoutBtn.classList.remove('hidden');
+                publicInfoBox.classList.add('hidden');
+            } else {
+                document.body.classList.remove('is-admin');
+                adminBadge.classList.add('hidden');
+                adminBadge.classList.remove('flex');
+                loginToggleBtn.classList.remove('hidden');
+                logoutBtn.classList.add('hidden');
+                publicInfoBox.classList.remove('hidden');
+            }
+            renderTable(); // Re-render to show/hide delete buttons
+        }
+
+        // Helpers
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            document.getElementById('toastMessage').innerText = message;
+            icon.className = isError ? "fas fa-exclamation-circle text-red-500" : "fas fa-check-circle text-green-400";
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+        }
+
+        window.togglePekerjaanCustom = () => {
+            const val = selectPekerjaan.value;
+            const needsCustom = ["Wiraswasta", "Lainnya", "Karyawan Swasta"].includes(val);
+            if (needsCustom) {
+                wrapperPekerjaanCustom.classList.remove('hidden');
+                inputPekerjaanCustom.required = true;
+                if (val === "Karyawan Swasta") {
+                    labelPekerjaanCustom.innerText = "Nama Perusahaan / Bidang";
+                } else if (val === "Wiraswasta") {
+                    labelPekerjaanCustom.innerText = "Bidang Usaha";
+                } else {
+                    labelPekerjaanCustom.innerText = "Detail Pekerjaan";
+                }
+            } else {
+                wrapperPekerjaanCustom.classList.add('hidden');
+                inputPekerjaanCustom.required = false;
+                inputPekerjaanCustom.value = '';
+            }
+        };
+
+        // Firebase Initialization
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth Error:", error);
+                showToast("Koneksi gagal.", true);
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user) {
+                loadingOverlay.classList.add('opacity-0');
+                setTimeout(() => loadingOverlay.classList.add('hidden'), 300);
+                startDataSubscription();
+                
+                // Check existing session
+                if (sessionStorage.getItem('ansor_admin_session') === 'active') {
+                    setAdminMode(true);
+                }
+            }
+        });
+
+        const startDataSubscription = () => {
+            if (!currentUser) return;
+            const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'members'));
+            onSnapshot(q, (snapshot) => {
+                members = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                members.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                renderTable();
+                syncStatus.classList.remove('hidden');
+            }, (error) => {
+                showToast("Gagal memuat data.", true);
+            });
+        };
+
+        function renderTable(data = members) {
+            memberTableBody.innerHTML = '';
+            const isAdmin = document.body.classList.contains('is-admin');
+            
+            if (data.length === 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                data.forEach((member) => {
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50 transition";
+                    tr.innerHTML = `
+                        <td class="px-6 py-4">
+                            <div class="font-bold text-gray-900">${member.nama}</div>
+                            <div class="text-xs text-gray-500 font-mono">${member.nik}</div>
+                        </td>
+                        <td class="px-6 py-4 text-xs text-gray-600">
+                            ${member.pekerjaanDisplay}
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 rounded-full text-[10px] font-bold ${getKaderClass(member.kaderisasi)}">
+                                ${member.kaderisasi}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            ${member.isBanser ? '<span class="text-red-600 font-bold text-[10px] border border-red-600 px-1 rounded">BANSER</span>' : '<span class="text-gray-400 text-[10px] italic">ANSER</span>'}
+                        </td>
+                        <td class="px-6 py-4 text-center space-x-3">
+                            <button class="btn-copy text-blue-500 hover:text-blue-700" data-id="${member.id}" title="Salin Info">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            ${isAdmin ? `
+                                <button class="btn-delete text-red-500 hover:text-red-700" data-id="${member.id}" title="Hapus Data">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            ` : ''}
+                        </td>
+                    `;
+                    memberTableBody.appendChild(tr);
+                });
+
+                document.querySelectorAll('.btn-copy').forEach(btn => {
+                    btn.onclick = () => copyData(btn.dataset.id);
+                });
+                document.querySelectorAll('.btn-delete').forEach(btn => {
+                    btn.onclick = () => deleteMember(btn.dataset.id);
+                });
+            }
+            updateStats();
+        }
+
+        function getKaderClass(level) {
+            const greenLevels = ['PKD', 'PKL', 'PKN'];
+            const blueLevels = ['DTD', 'DIKLATSAR', 'SUSBALAN', 'DIKLATSUS', 'SUSBANPIM'];
+            if (greenLevels.includes(level)) return 'bg-green-100 text-green-800';
+            if (blueLevels.includes(level)) return 'bg-blue-100 text-blue-800';
+            return 'bg-gray-100 text-gray-800';
+        }
+
+        function updateStats() {
+            document.getElementById('total-members').innerText = members.length;
+            document.getElementById('total-pkd').innerText = members.filter(m => m.kaderisasi !== 'Anggota').length;
+            document.getElementById('total-banser').innerText = members.filter(m => m.isBanser).length;
+        }
+
+        memberForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerText = "MENYIMPAN...";
+
+            const kat = selectPekerjaan.value;
+            const custom = inputPekerjaanCustom.value;
+            let displayJob = kat;
+            if (["Wiraswasta", "Lainnya", "Karyawan Swasta"].includes(kat) && custom) {
+                displayJob = `${kat} (${custom})`;
+            }
+
+            const newMember = {
+                nama: document.getElementById('nama').value,
+                nik: document.getElementById('nik').value,
+                tempatLahir: document.getElementById('tempat_lahir').value,
+                tglLahir: document.getElementById('tgl_lahir').value,
+                kategoriPekerjaan: kat,
+                pekerjaanCustom: custom,
+                pekerjaanDisplay: displayJob,
+                alamat: document.getElementById('alamat').value,
+                kaderisasi: document.getElementById('kaderisasi').value,
+                isBanser: document.getElementById('is_banser').checked,
+                createdAt: serverTimestamp()
+            };
+
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'members'), newMember);
+                memberForm.reset();
+                window.togglePekerjaanCustom();
+                showToast("Data Berhasil Disimpan");
+            } catch (error) {
+                showToast("Gagal menyimpan.", true);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = "SIMPAN DATA";
+            }
+        });
+
+        async function deleteMember(docId) {
+            if (!confirm("Hapus data anggota ini?")) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', docId));
+                showToast("Data terhapus");
+            } catch (error) {
+                showToast("Hapus gagal.", true);
+            }
+        }
+
+        function copyData(docId) {
+            const m = members.find(item => item.id === docId);
+            if (!m) return;
+            const text = `Data Anggota GP Ansor Panongan\nNama: ${m.nama}\nNIK: ${m.nik}\nKaderisasi: ${m.kaderisasi}`;
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast("Data disalin");
+        }
+
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const filtered = members.filter(m => 
+                m.nama.toLowerCase().includes(term) || 
+                m.nik.includes(term) ||
+                m.kaderisasi.toLowerCase().includes(term)
+            );
+            renderTable(filtered);
+        });
+
+        initAuth();
+    </script>
+</body>
+</html>
